@@ -5,7 +5,7 @@
 #include <limits.h>
 
 #define MAX_MESSAGE 1048576 // 1MB for large messages
-#define DEFAULT_KEY_VECTOR_SIZE 62
+#define DEFAULT_KEY_VECTOR_SIZE 63 // a-z, 0-9, A-Z, space
 #define MAX_KEY_SIZE 256
 
 // Function to initialize the default key vector
@@ -17,12 +17,14 @@ void init_default_key_vector(char *key_vector) {
     for (char c = '0'; c <= '9'; c++) key_vector[i++] = c;
     // Uppercase letters
     for (char c = 'A'; c <= 'Z'; c++) key_vector[i++] = c;
+    // Space
+    key_vector[i++] = ' ';
     key_vector[i] = '\0';
 }
 
 // Function to generate a random key vector
 void generate_random_key_vector(char *key_vector, int *size) {
-    char pool[] = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    char pool[] = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ ";
     int pool_size = strlen(pool);
     *size = 10 + rand() % (MAX_KEY_SIZE - 10); // Random size between 10 and MAX_KEY_SIZE
     for (int i = 0; i < *size; i++) {
@@ -47,7 +49,7 @@ int find_char_pos(char c, char *key_vector, int size) {
     return -1; // Character not found
 }
 
-// Encrypt the message
+// Encrypt the message using shortest path (> or <)
 void encrypt(char *message, int sPos, char *key_vector, int key_size, char *output) {
     int current_pos = sPos;
     size_t output_index = 0;
@@ -56,13 +58,23 @@ void encrypt(char *message, int sPos, char *key_vector, int key_size, char *outp
         int target_pos = find_char_pos(message[i], key_vector, key_size);
         if (target_pos == -1) continue; // Skip invalid characters
         
-        // Always move forward (using >)
-        int distance = (target_pos >= current_pos) ? 
-                       target_pos - current_pos : 
-                       key_size - current_pos + target_pos;
+        // Calculate forward and backward distances
+        int forward_dist = (target_pos >= current_pos) ? 
+                           target_pos - current_pos : 
+                           key_size - current_pos + target_pos;
+        int backward_dist = (current_pos >= target_pos) ? 
+                            current_pos - target_pos : 
+                            current_pos + (key_size - target_pos);
         
-        for (int j = 0; j < distance; j++) {
-            output[output_index++] = '>';
+        // Choose shortest path
+        if (forward_dist <= backward_dist) {
+            for (int j = 0; j < forward_dist; j++) {
+                output[output_index++] = '>';
+            }
+        } else {
+            for (int j = 0; j < backward_dist; j++) {
+                output[output_index++] = '<';
+            }
         }
         
         output[output_index++] = '+';
@@ -77,12 +89,12 @@ void print_usage() {
     printf("Usage: bfe --message <message> [--spos <starting_position>] [--kvec <custom_key_vector>]\n");
     printf("  --message <text>: The text to encrypt (max %d characters)\n", MAX_MESSAGE);
     printf("  --spos <number>: Starting position in key vector (0 to key_vector_size-1, default: random)\n");
-    printf("  --kvec <string>: Custom key vector (default: random or a-z,0-9,A-Z)\n");
+    printf("  --kvec <string>: Custom key vector (default: random or a-z,0-9,A-Z,space)\n");
     printf("\nExamples:\n");
-    printf("  bfe --message \"hello worlds!\"                    # Random sPos and key vector\n");
-    printf("  bfe --message \"hello worlds!\" --spos 3          # Specified sPos, default key vector\n");
+    printf("  bfe --message \"hello world\"                    # Random sPos and key vector\n");
+    printf("  bfe --message \"hello world\" --spos 3          # Specified sPos, default key vector\n");
     printf("  bfe --message \"hello\" --spos 0 --kvec \"abc123\" # Specified sPos and custom key vector\n");
-    printf("\nOutput format: Uses '>' for movement, '+' for character selection\n");
+    printf("\nOutput format: Uses '>' or '<' for movement, '+' for character selection\n");
 }
 
 int main(int argc, char *argv[]) {
